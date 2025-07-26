@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>GPS Coordinates</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      text-align: center;
+      padding: 20px;
+      background-color: #111;
+      color: #fff;
+      font-size: 1.5em;
+    }
+    #coords {
+      margin-top: 20px;
+      font-size: 1.8em;
+      color: #0f0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Your GPS Coordinates</h1>
+  <div id="coords">Loading...</div>
+
+  <script>
+    function updateCoordinates() {
+      if (navigator.geolocation) {
+        navigator.geolocation.watchPosition(
+          (position) => {
+            const lat = position.coords.latitude.toFixed(6);
+            const lon = position.coords.longitude.toFixed(6);
+            document.getElementById('coords').innerText = `Lat: ${lat}, Lon: ${lon}`;
+          },
+          (error) => {
+            document.getElementById('coords').innerText = 'Error: ' + error.message;
+          },
+          { enableHighAccuracy: true }
+        );
+      } else {
+        document.getElementById('coords').innerText = 'Geolocation not supported.';
+      }
+    }
+
+    updateCoordinates();
+  </script>
+</body>
+</html>
