@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>VR – drzewa OSM z HUD w VR</title>
+  <title>VR – drzewa OSM (Fix Fullscreen + HUD)</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <style>
     body, html { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
@@ -30,17 +30,18 @@
 </head>
 <body>
   <div id="startScreen">
-    <button id="startBtn">Fullscreen VR</button>
+    <button id="startBtn">Start VR</button>
   </div>
 
-  <a-scene vr-mode-ui="enabled: true">
+  <a-scene id="scene" vr-mode-ui="enabled: true">
     <a-entity id="player" position="0 0 0">
       <a-camera id="camera" wasd-controls-enabled="false">
         <!-- HUD texts -->
-        <a-entity position="0 -0.2 -1.2">
-          <a-text id="gpsText" value="GPS: ..." color="#FFF" align="center" width="2"></a-text>
-          <a-text id="headingText" value="Heading: ..." color="#FFF" align="center" width="2" position="0 -0.08 0"></a-text>
-          <a-text id="accuracyText" value="± ... m" color="#FFF" align="center" width="2" position="0 -0.16 0"></a-text>
+        <a-entity id="hud" position="0 0 -0.8">
+          <a-text id="statusText" value="Ładowanie..." color="#FFF" align="center" width="2"></a-text>
+          <a-text id="gpsText" value="GPS: ..." color="#FFF" align="center" width="2" position="0 -0.08 0"></a-text>
+          <a-text id="headingText" value="Heading: ..." color="#FFF" align="center" width="2" position="0 -0.16 0"></a-text>
+          <a-text id="accuracyText" value="± ... m" color="#FFF" align="center" width="2" position="0 -0.24 0"></a-text>
         </a-entity>
         <!-- Mini-map plane -->
         <a-plane id="mapPlane" position="0.4 -0.4 -1" width="0.4" height="0.4" color="#111"></a-plane>
@@ -58,16 +59,18 @@
     const gpsText = document.getElementById('gpsText');
     const headingText = document.getElementById('headingText');
     const accuracyText = document.getElementById('accuracyText');
+    const statusText = document.getElementById('statusText');
     const startBtn = document.getElementById('startBtn');
     const startScreen = document.getElementById('startScreen');
     const mapPlane = document.getElementById('mapPlane');
+    const sceneEl = document.getElementById('scene');
 
     let userLat = null;
     let userLon = null;
     let treePositions = [];
     let treesData = [];
 
-    // Create offscreen canvas for mini-map
+    // Offscreen canvas for mini-map
     const mapCanvas = document.createElement('canvas');
     mapCanvas.width = 256;
     mapCanvas.height = 256;
@@ -76,6 +79,7 @@
     mapPlane.object3D.material.map = mapTexture;
 
     function fetchTrees(lat, lon) {
+      statusText.setAttribute('value', 'Pobieram drzewa...');
       const url = `https://overpass-api.de/api/interpreter?data=[out:json];node(around:${RADIUS_METERS},${lat},${lon})[natural=tree];out;`;
       return fetch(url).then(r => r.json()).then(json => json.elements.slice(0, MAX_TREES));
     }
@@ -107,7 +111,7 @@
 
       cyl.addEventListener('click', () => {
         const distance = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
-        headingText.setAttribute('value', `Heading: ${distance.toFixed(1)}m from tree`);
+        statusText.setAttribute('value', `Tree ID: ${tree.id}, ${distance.toFixed(1)}m`);
       });
 
       scene.appendChild(cyl);
@@ -118,7 +122,7 @@
     function drawMap() {
       mapCtx.fillStyle = "#111";
       mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
-      // User in center
+      // User
       mapCtx.fillStyle = "red";
       mapCtx.beginPath();
       mapCtx.arc(mapCanvas.width/2, mapCanvas.height/2, 4, 0, 2*Math.PI);
@@ -150,10 +154,17 @@
           .then(trees => {
             treePositions = [];
             treesData = [];
-            trees.forEach(t => addTree3D(t));
-            drawMap();
+            if (trees.length === 0) {
+              statusText.setAttribute('value', 'Brak drzew w pobliżu.');
+            } else {
+              trees.forEach(t => addTree3D(t));
+              drawMap();
+              statusText.setAttribute('value', 'Drzewa załadowane.');
+            }
           })
-          .catch(err => console.error('Błąd OSM:', err));
+          .catch(err => {
+            statusText.setAttribute('value', 'Błąd OSM');
+          });
       } else {
         drawMap();
       }
@@ -173,7 +184,6 @@
       gpsText.setAttribute('value', 'Brak wsparcia GPS');
     }
 
-    // Device orientation
     window.addEventListener('deviceorientation', function(event) {
       let heading;
       if (event.webkitCompassHeading !== undefined) heading = event.webkitCompassHeading;
@@ -184,11 +194,8 @@
       }
     }, true);
 
-    // Start fullscreen
     startBtn.addEventListener('click', () => {
-      if (document.documentElement.requestFullscreen) {
-        document.documentElement.requestFullscreen();
-      }
+      if (sceneEl.requestFullscreen) sceneEl.requestFullscreen();
       startScreen.style.display = 'none';
     });
   </script>
