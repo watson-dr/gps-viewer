@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>VR – drzewa OSM (Fix Fullscreen + HUD)</title>
+  <title>VR – drzewa OSM (Auto VR)</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <style>
     body, html { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
@@ -37,14 +37,14 @@
     <a-entity id="player" position="0 0 0">
       <a-camera id="camera" wasd-controls-enabled="false">
         <!-- HUD texts -->
-        <a-entity id="hud" position="0 0 -0.8">
-          <a-text id="statusText" value="Ładowanie..." color="#FFF" align="center" width="2"></a-text>
-          <a-text id="gpsText" value="GPS: ..." color="#FFF" align="center" width="2" position="0 -0.08 0"></a-text>
-          <a-text id="headingText" value="Heading: ..." color="#FFF" align="center" width="2" position="0 -0.16 0"></a-text>
-          <a-text id="accuracyText" value="± ... m" color="#FFF" align="center" width="2" position="0 -0.24 0"></a-text>
+        <a-entity id="hud" position="0 -0.05 -0.6">
+          <a-text id="statusText" value="Ładowanie..." color="#FFF" align="center" width="1.5"></a-text>
+          <a-text id="gpsText" value="GPS: ..." color="#FFF" align="center" width="1.5" position="0 -0.08 0"></a-text>
+          <a-text id="headingText" value="Heading: ..." color="#FFF" align="center" width="1.5" position="0 -0.16 0"></a-text>
+          <a-text id="accuracyText" value="± ... m" color="#FFF" align="center" width="1.5" position="0 -0.24 0"></a-text>
         </a-entity>
         <!-- Mini-map plane -->
-        <a-plane id="mapPlane" position="0.4 -0.4 -1" width="0.4" height="0.4" color="#111"></a-plane>
+        <a-plane id="mapPlane" position="0.35 -0.25 -0.6" width="0.25" height="0.25" color="#111"></a-plane>
       </a-camera>
       <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
     </a-entity>
@@ -196,6 +196,7 @@
 
     startBtn.addEventListener('click', () => {
       if (sceneEl.requestFullscreen) sceneEl.requestFullscreen();
+      if (sceneEl.enterVR) sceneEl.enterVR();  // Force VR mode
       startScreen.style.display = 'none';
     });
   </script>
