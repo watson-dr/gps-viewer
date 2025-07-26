@@ -3,10 +3,29 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>VR – drzewa OSM z GPS, Heading i Canvas Mapą</title>
+  <title>VR – drzewa OSM (Fullscreen)</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <style>
-    body, html { margin: 0; padding: 0; background: #000; height: 100%; }
+    body, html { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
+    #startScreen {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      background: #000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      z-index: 9999;
+    }
+    #startScreen button {
+      padding: 15px 30px;
+      font-size: 18px;
+      background: #228B22;
+      color: #fff;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+    }
     #hud {
       position: fixed;
       top: 10px; left: 50%;
@@ -19,6 +38,7 @@
       z-index: 10;
       text-align: center;
       font-size: 14px;
+      display: none;
     }
     #mapCanvas {
       position: fixed;
@@ -30,20 +50,27 @@
       border-radius: 4px;
       background: #111;
       z-index: 9;
+      display: none;
     }
   </style>
 </head>
 <body>
+  <div id="startScreen">
+    <button id="startBtn">Fullscreen VR</button>
+  </div>
+
   <div id="hud">
     <div id="gps">GPS: ...</div>
     <div id="heading">Heading: ...</div>
     <div id="accuracy">± ... m</div>
+    <div id="treeInfo"></div>
   </div>
   <canvas id="mapCanvas" width="150" height="150"></canvas>
 
   <a-scene vr-mode-ui="enabled: true">
     <a-entity id="player" position="0 0 0">
-      <a-camera id="camera" wasd-controls-enabled="false"></a-camera>
+      <a-camera id="camera" wasd-controls-enabled="false" cursor="rayOrigin: mouse"></a-camera>
+      <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
     </a-entity>
   </a-scene>
 
@@ -56,19 +83,21 @@
     const gpsEl = document.getElementById('gps');
     const headingEl = document.getElementById('heading');
     const accuracyEl = document.getElementById('accuracy');
+    const treeInfoEl = document.getElementById('treeInfo');
     const canvas = document.getElementById('mapCanvas');
     const ctx = canvas.getContext('2d');
+    const startBtn = document.getElementById('startBtn');
+    const hud = document.getElementById('hud');
+    const startScreen = document.getElementById('startScreen');
 
     let userLat = null;
     let userLon = null;
     let treePositions = [];
+    let treesData = [];
 
     function fetchTrees(lat, lon) {
       const url = `https://overpass-api.de/api/interpreter?data=[out:json];node(around:${RADIUS_METERS},${lat},${lon})[natural=tree];out;`;
-
-      return fetch(url)
-        .then(r => r.json())
-        .then(json => json.elements.slice(0, MAX_TREES));
+      return fetch(url).then(r => r.json()).then(json => json.elements.slice(0, MAX_TREES));
     }
 
     function rand(min, max) {
@@ -84,30 +113,36 @@
       return { x: x, z: -z };
     }
 
-    function addTree3D(lat, lon) {
+    function addTree3D(tree) {
       const scene = document.querySelector('a-scene');
-      const pos = latLonToMeters(lat, lon);
-      const cyl = document.createElement('a-cylinder');
+      const pos = latLonToMeters(tree.lat, tree.lon);
       const h = rand(TREE_MIN_H, TREE_MAX_H).toFixed(2);
+
+      const cyl = document.createElement('a-cylinder');
       cyl.setAttribute('position', `${pos.x} ${h/2} ${pos.z}`);
       cyl.setAttribute('height', h);
       cyl.setAttribute('radius', 0.15);
       cyl.setAttribute('color', '#228B22');
-      cyl.setAttribute('opacity', 0.9);
+      cyl.classList.add('clickable');
+
+      cyl.addEventListener('click', () => {
+        const distance = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
+        treeInfoEl.textContent = `Tree ID: ${tree.id}, Dist: ${distance.toFixed(1)}m`;
+      });
+
       scene.appendChild(cyl);
       treePositions.push(pos);
+      treesData.push(tree);
     }
 
     function drawCanvasMap() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
-      // Draw center (user)
       ctx.fillStyle = "red";
       ctx.beginPath();
       ctx.arc(canvas.width/2, canvas.height/2, 4, 0, 2*Math.PI);
       ctx.fill();
-      // Draw trees relative
       ctx.fillStyle = "green";
-      const scale = 0.3; // px per meter
+      const scale = 0.3;
       treePositions.forEach(pos => {
         const x = canvas.width/2 + pos.x * scale;
         const y = canvas.height/2 + pos.z * scale;
@@ -130,7 +165,8 @@
         fetchTrees(userLat, userLon)
           .then(trees => {
             treePositions = [];
-            trees.forEach(t => addTree3D(t.lat, t.lon));
+            treesData = [];
+            trees.forEach(t => addTree3D(t));
             drawCanvasMap();
           })
           .catch(err => console.error('Błąd OSM:', err));
@@ -153,7 +189,7 @@
       gpsEl.textContent = 'Brak wsparcia dla Geolocation API.';
     }
 
-    // Device orientation for heading
+    // Device orientation
     window.addEventListener('deviceorientation', function(event) {
       let heading;
       if (event.webkitCompassHeading !== undefined) heading = event.webkitCompassHeading;
@@ -163,6 +199,16 @@
         document.querySelector('#player').setAttribute('rotation', `0 ${heading} 0`);
       }
     }, true);
+
+    // Start fullscreen and show HUD
+    startBtn.addEventListener('click', () => {
+      if (document.documentElement.requestFullscreen) {
+        document.documentElement.requestFullscreen();
+      }
+      startScreen.style.display = 'none';
+      hud.style.display = 'block';
+      canvas.style.display = 'block';
+    });
   </script>
 </body>
 </html>
