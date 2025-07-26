@@ -3,9 +3,11 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GPS Viewer AR + VR + Smooth Compass</title>
+  <title>GPS Viewer AR + VR + Fullscreen Map</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
+  <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+  <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
   <style>
     body, html {
       margin: 0;
@@ -31,6 +33,37 @@
     #hud .heading {
       color: cyan;
     }
+    #map {
+      position: fixed;
+      bottom: 10px;
+      right: 10px;
+      width: 200px;
+      height: 200px;
+      border: 2px solid #fff;
+      border-radius: 10px;
+      z-index: 9;
+      transition: all 0.3s ease-in-out;
+    }
+    .marker-heading {
+      width: 0;
+      height: 0;
+      border-left: 8px solid transparent;
+      border-right: 8px solid transparent;
+      border-bottom: 16px solid red;
+      transform-origin: center center;
+    }
+    #fullscreen-btn {
+      position: fixed;
+      bottom: 220px;
+      right: 10px;
+      background: rgba(0, 0, 0, 0.5);
+      color: #fff;
+      border: none;
+      padding: 5px 10px;
+      border-radius: 5px;
+      z-index: 10;
+      cursor: pointer;
+    }
   </style>
 </head>
 <body>
@@ -39,6 +72,9 @@
     <div id="coords">Fetching GPS...</div>
     <div class="heading" id="heading">Heading: ...</div>
   </div>
+  <!-- Mini-map -->
+  <div id="map"></div>
+  <button id="fullscreen-btn">Fullscreen Map</button>
 
   <a-scene
     embedded
@@ -69,6 +105,24 @@
     let filteredHeading = 0;
     let currentRotation = 0;
     let targetRotation = 0;
+    let map, markerHeading;
+    let isFullscreen = false;
+
+    function initMap(lat = 0, lon = 0) {
+      map = L.map('map').setView([lat, lon], 15);
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+        maxZoom: 19
+      }).addTo(map);
+
+      // Create custom heading marker
+      const headingIcon = L.divIcon({
+        className: '',
+        html: '<div class="marker-heading"></div>',
+        iconSize: [20, 20],
+        iconAnchor: [10, 10]
+      });
+      markerHeading = L.marker([lat, lon], {icon: headingIcon}).addTo(map);
+    }
 
     function updateGPS() {
       if (navigator.geolocation) {
@@ -78,6 +132,14 @@
             const lon = pos.coords.longitude.toFixed(6);
             const acc = pos.coords.accuracy.toFixed(1);
             document.querySelector('#coords').innerText = `Lat: ${lat}, Lon: ${lon} (±${acc} m)`;
+            if (!map) {
+              initMap(lat, lon);
+            } else {
+              markerHeading.setLatLng([lat, lon]);
+              if (!isFullscreen) {
+                map.setView([lat, lon]);
+              }
+            }
           },
           (err) => {
             document.querySelector('#coords').innerText = 'Error: ' + err.message;
@@ -97,11 +159,13 @@
         heading = 360 - event.alpha; // Android
       }
       if (heading !== undefined) {
-        // Low-pass filter for smoother transitions
         filteredHeading = filteredHeading + 0.1 * (heading - filteredHeading);
         targetRotation = filteredHeading;
         const dir = compassDirection(filteredHeading);
         document.querySelector('#heading').innerText = `Heading: ${filteredHeading.toFixed(0)}° (${dir})`;
+        if (markerHeading) {
+          markerHeading._icon.style.transform = `rotate(${filteredHeading}deg)`;
+        }
       }
     }
 
@@ -116,6 +180,26 @@
       container.setAttribute('rotation', `0 0 ${currentRotation.toFixed(1)}`);
       requestAnimationFrame(smoothRotate);
     }
+
+    // Fullscreen map toggle
+    document.getElementById('fullscreen-btn').addEventListener('click', () => {
+      const mapDiv = document.getElementById('map');
+      if (!isFullscreen) {
+        mapDiv.style.width = '100%';
+        mapDiv.style.height = '100%';
+        mapDiv.style.bottom = '0';
+        mapDiv.style.right = '0';
+        document.getElementById('fullscreen-btn').innerText = 'Exit Map';
+      } else {
+        mapDiv.style.width = '200px';
+        mapDiv.style.height = '200px';
+        mapDiv.style.bottom = '10px';
+        mapDiv.style.right = '10px';
+        document.getElementById('fullscreen-btn').innerText = 'Fullscreen Map';
+      }
+      isFullscreen = !isFullscreen;
+      map.invalidateSize();
+    });
 
     if (window.DeviceOrientationEvent) {
       window.addEventListener('deviceorientation', updateCompass, true);
