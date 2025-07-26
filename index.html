@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>VR – drzewa OSM (Auto VR)</title>
+  <title>VR – drzewa OSM (Fullfix)</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <style>
     body, html { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
@@ -31,19 +31,18 @@
 <body>
   <div id="startScreen">
     <button id="startBtn">Start VR</button>
+    <p style="color:white; font-size:14px; text-align:center; max-width: 80%;">Jeśli nie przechodzi w pełny ekran, kliknij ikonę VR w prawym dolnym rogu.</p>
   </div>
 
   <a-scene id="scene" vr-mode-ui="enabled: true">
     <a-entity id="player" position="0 0 0">
       <a-camera id="camera" wasd-controls-enabled="false">
-        <!-- HUD texts -->
         <a-entity id="hud" position="0 -0.05 -0.6">
           <a-text id="statusText" value="Ładowanie..." color="#FFF" align="center" width="1.5"></a-text>
           <a-text id="gpsText" value="GPS: ..." color="#FFF" align="center" width="1.5" position="0 -0.08 0"></a-text>
           <a-text id="headingText" value="Heading: ..." color="#FFF" align="center" width="1.5" position="0 -0.16 0"></a-text>
           <a-text id="accuracyText" value="± ... m" color="#FFF" align="center" width="1.5" position="0 -0.24 0"></a-text>
         </a-entity>
-        <!-- Mini-map plane -->
         <a-plane id="mapPlane" position="0.35 -0.25 -0.6" width="0.25" height="0.25" color="#111"></a-plane>
       </a-camera>
       <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
@@ -51,19 +50,19 @@
   </a-scene>
 
   <script>
-    const RADIUS_METERS = 250;
-    const MAX_TREES = 150;
-    const TREE_MIN_H = 2.0;
-    const TREE_MAX_H = 8.0;
-
     const gpsText = document.getElementById('gpsText');
     const headingText = document.getElementById('headingText');
     const accuracyText = document.getElementById('accuracyText');
     const statusText = document.getElementById('statusText');
     const startBtn = document.getElementById('startBtn');
     const startScreen = document.getElementById('startScreen');
-    const mapPlane = document.getElementById('mapPlane');
     const sceneEl = document.getElementById('scene');
+    const mapPlane = document.getElementById('mapPlane');
+
+    const RADIUS_METERS = 250;
+    const MAX_TREES = 150;
+    const TREE_MIN_H = 2.0;
+    const TREE_MAX_H = 8.0;
 
     let userLat = null;
     let userLon = null;
@@ -122,12 +121,10 @@
     function drawMap() {
       mapCtx.fillStyle = "#111";
       mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
-      // User
       mapCtx.fillStyle = "red";
       mapCtx.beginPath();
       mapCtx.arc(mapCanvas.width/2, mapCanvas.height/2, 4, 0, 2*Math.PI);
       mapCtx.fill();
-      // Trees
       mapCtx.fillStyle = "green";
       const scale = 0.3;
       treePositions.forEach(pos => {
@@ -195,8 +192,23 @@
     }, true);
 
     startBtn.addEventListener('click', () => {
-      if (sceneEl.requestFullscreen) sceneEl.requestFullscreen();
-      if (sceneEl.enterVR) sceneEl.enterVR();  // Force VR mode
+      // Fullscreen fix for multiple browsers
+      const canvasEl = sceneEl.canvas;
+      if (canvasEl) {
+        if (canvasEl.requestFullscreen) canvasEl.requestFullscreen();
+        else if (canvasEl.webkitRequestFullscreen) canvasEl.webkitRequestFullscreen();
+        else if (canvasEl.mozRequestFullScreen) canvasEl.mozRequestFullScreen();
+        else if (canvasEl.msRequestFullscreen) canvasEl.msRequestFullscreen();
+      }
+      // Force VR mode
+      if (sceneEl.enterVR) {
+        sceneEl.enterVR().then(() => {
+          console.log("VR mode entered");
+          statusText.setAttribute('value', 'VR Mode On');
+        }).catch(err => {
+          console.warn("enterVR failed", err);
+        });
+      }
       startScreen.style.display = 'none';
     });
   </script>
