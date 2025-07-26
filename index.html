@@ -3,7 +3,7 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no" />
-  <title>VR – drzewa OSM (Fullscreen)</title>
+  <title>VR – drzewa OSM z HUD w VR</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <style>
     body, html { margin: 0; padding: 0; background: #000; height: 100%; overflow: hidden; }
@@ -26,32 +26,6 @@
       border-radius: 5px;
       cursor: pointer;
     }
-    #hud {
-      position: fixed;
-      top: 10px; left: 50%;
-      transform: translateX(-50%);
-      background: rgba(0,0,0,0.6);
-      color: #fff;
-      padding: 5px 10px;
-      border-radius: 5px;
-      font-family: monospace;
-      z-index: 10;
-      text-align: center;
-      font-size: 14px;
-      display: none;
-    }
-    #mapCanvas {
-      position: fixed;
-      bottom: 10px;
-      right: 10px;
-      width: 150px;
-      height: 150px;
-      border: 2px solid #fff;
-      border-radius: 4px;
-      background: #111;
-      z-index: 9;
-      display: none;
-    }
   </style>
 </head>
 <body>
@@ -59,17 +33,18 @@
     <button id="startBtn">Fullscreen VR</button>
   </div>
 
-  <div id="hud">
-    <div id="gps">GPS: ...</div>
-    <div id="heading">Heading: ...</div>
-    <div id="accuracy">± ... m</div>
-    <div id="treeInfo"></div>
-  </div>
-  <canvas id="mapCanvas" width="150" height="150"></canvas>
-
   <a-scene vr-mode-ui="enabled: true">
     <a-entity id="player" position="0 0 0">
-      <a-camera id="camera" wasd-controls-enabled="false" cursor="rayOrigin: mouse"></a-camera>
+      <a-camera id="camera" wasd-controls-enabled="false">
+        <!-- HUD texts -->
+        <a-entity position="0 -0.2 -1.2">
+          <a-text id="gpsText" value="GPS: ..." color="#FFF" align="center" width="2"></a-text>
+          <a-text id="headingText" value="Heading: ..." color="#FFF" align="center" width="2" position="0 -0.08 0"></a-text>
+          <a-text id="accuracyText" value="± ... m" color="#FFF" align="center" width="2" position="0 -0.16 0"></a-text>
+        </a-entity>
+        <!-- Mini-map plane -->
+        <a-plane id="mapPlane" position="0.4 -0.4 -1" width="0.4" height="0.4" color="#111"></a-plane>
+      </a-camera>
       <a-entity cursor="rayOrigin: mouse" raycaster="objects: .clickable"></a-entity>
     </a-entity>
   </a-scene>
@@ -80,20 +55,25 @@
     const TREE_MIN_H = 2.0;
     const TREE_MAX_H = 8.0;
 
-    const gpsEl = document.getElementById('gps');
-    const headingEl = document.getElementById('heading');
-    const accuracyEl = document.getElementById('accuracy');
-    const treeInfoEl = document.getElementById('treeInfo');
-    const canvas = document.getElementById('mapCanvas');
-    const ctx = canvas.getContext('2d');
+    const gpsText = document.getElementById('gpsText');
+    const headingText = document.getElementById('headingText');
+    const accuracyText = document.getElementById('accuracyText');
     const startBtn = document.getElementById('startBtn');
-    const hud = document.getElementById('hud');
     const startScreen = document.getElementById('startScreen');
+    const mapPlane = document.getElementById('mapPlane');
 
     let userLat = null;
     let userLon = null;
     let treePositions = [];
     let treesData = [];
+
+    // Create offscreen canvas for mini-map
+    const mapCanvas = document.createElement('canvas');
+    mapCanvas.width = 256;
+    mapCanvas.height = 256;
+    const mapCtx = mapCanvas.getContext('2d');
+    const mapTexture = new THREE.CanvasTexture(mapCanvas);
+    mapPlane.object3D.material.map = mapTexture;
 
     function fetchTrees(lat, lon) {
       const url = `https://overpass-api.de/api/interpreter?data=[out:json];node(around:${RADIUS_METERS},${lat},${lon})[natural=tree];out;`;
@@ -127,7 +107,7 @@
 
       cyl.addEventListener('click', () => {
         const distance = Math.sqrt(pos.x * pos.x + pos.z * pos.z);
-        treeInfoEl.textContent = `Tree ID: ${tree.id}, Dist: ${distance.toFixed(1)}m`;
+        headingText.setAttribute('value', `Heading: ${distance.toFixed(1)}m from tree`);
       });
 
       scene.appendChild(cyl);
@@ -135,21 +115,25 @@
       treesData.push(tree);
     }
 
-    function drawCanvasMap() {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      ctx.fillStyle = "red";
-      ctx.beginPath();
-      ctx.arc(canvas.width/2, canvas.height/2, 4, 0, 2*Math.PI);
-      ctx.fill();
-      ctx.fillStyle = "green";
+    function drawMap() {
+      mapCtx.fillStyle = "#111";
+      mapCtx.fillRect(0, 0, mapCanvas.width, mapCanvas.height);
+      // User in center
+      mapCtx.fillStyle = "red";
+      mapCtx.beginPath();
+      mapCtx.arc(mapCanvas.width/2, mapCanvas.height/2, 4, 0, 2*Math.PI);
+      mapCtx.fill();
+      // Trees
+      mapCtx.fillStyle = "green";
       const scale = 0.3;
       treePositions.forEach(pos => {
-        const x = canvas.width/2 + pos.x * scale;
-        const y = canvas.height/2 + pos.z * scale;
-        ctx.beginPath();
-        ctx.arc(x, y, 2, 0, 2*Math.PI);
-        ctx.fill();
+        const x = mapCanvas.width/2 + pos.x * scale;
+        const y = mapCanvas.height/2 + pos.z * scale;
+        mapCtx.beginPath();
+        mapCtx.arc(x, y, 2, 0, 2*Math.PI);
+        mapCtx.fill();
       });
+      mapTexture.needsUpdate = true;
     }
 
     function onPosition(pos) {
@@ -157,8 +141,8 @@
       userLon = pos.coords.longitude;
       const acc = pos.coords.accuracy;
 
-      gpsEl.textContent = `GPS: ${userLat.toFixed(6)}, ${userLon.toFixed(6)}`;
-      accuracyEl.textContent = `± ${acc.toFixed(0)} m`;
+      gpsText.setAttribute('value', `GPS: ${userLat.toFixed(6)}, ${userLon.toFixed(6)}`);
+      accuracyText.setAttribute('value', `± ${acc.toFixed(0)} m`);
 
       if (!window._treesLoaded) {
         window._treesLoaded = true;
@@ -167,16 +151,16 @@
             treePositions = [];
             treesData = [];
             trees.forEach(t => addTree3D(t));
-            drawCanvasMap();
+            drawMap();
           })
           .catch(err => console.error('Błąd OSM:', err));
       } else {
-        drawCanvasMap();
+        drawMap();
       }
     }
 
     function onError(err) {
-      gpsEl.textContent = 'GPS error: ' + err.message;
+      gpsText.setAttribute('value', 'GPS error');
     }
 
     if ('geolocation' in navigator) {
@@ -186,7 +170,7 @@
         timeout: 20000
       });
     } else {
-      gpsEl.textContent = 'Brak wsparcia dla Geolocation API.';
+      gpsText.setAttribute('value', 'Brak wsparcia GPS');
     }
 
     // Device orientation
@@ -195,19 +179,17 @@
       if (event.webkitCompassHeading !== undefined) heading = event.webkitCompassHeading;
       else if (event.alpha !== null) heading = 360 - event.alpha;
       if (heading !== undefined) {
-        headingEl.textContent = `Heading: ${heading.toFixed(0)}°`;
+        headingText.setAttribute('value', `Heading: ${heading.toFixed(0)}°`);
         document.querySelector('#player').setAttribute('rotation', `0 ${heading} 0`);
       }
     }, true);
 
-    // Start fullscreen and show HUD
+    // Start fullscreen
     startBtn.addEventListener('click', () => {
       if (document.documentElement.requestFullscreen) {
         document.documentElement.requestFullscreen();
       }
       startScreen.style.display = 'none';
-      hud.style.display = 'block';
-      canvas.style.display = 'block';
     });
   </script>
 </body>
