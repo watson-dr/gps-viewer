@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>GPS Viewer AR + VR + 3D Compass Arrow</title>
+  <title>GPS Viewer AR + VR + Smooth Compass</title>
   <script src="https://aframe.io/releases/1.4.0/aframe.min.js"></script>
   <script src="https://raw.githack.com/AR-js-org/AR.js/master/aframe/build/aframe-ar.js"></script>
   <style>
@@ -14,28 +14,61 @@
       width: 100%;
       background: #000;
     }
+    #hud {
+      position: fixed;
+      top: 10px;
+      left: 50%;
+      transform: translateX(-50%);
+      text-align: center;
+      background: rgba(0, 0, 0, 0.5);
+      padding: 10px 15px;
+      border-radius: 8px;
+      color: #fff;
+      font-family: Arial, sans-serif;
+      font-size: 1.2em;
+      z-index: 10;
+    }
+    #hud .heading {
+      color: cyan;
+    }
   </style>
 </head>
 <body>
+  <!-- HUD overlay -->
+  <div id="hud">
+    <div id="coords">Fetching GPS...</div>
+    <div class="heading" id="heading">Heading: ...</div>
+  </div>
+
   <a-scene
     embedded
     arjs="sourceType: webcam; debugUIEnabled: false;"
     vr-mode-ui="enabled: true"
   >
-    <a-text id="gps-text" value="Fetching GPS..." position="0 1.5 -3" color="yellow" align="center"></a-text>
-    <a-text id="compass-text" value="Heading: ..." position="0 1.1 -3" color="cyan" align="center"></a-text>
-    
-    <!-- 3D arrow composed of a cone (arrowhead) and cylinder (shaft) -->
-    <a-entity id="compass-arrow" position="0 0.5 -3" rotation="0 0 0">
-      <a-cylinder position="0 0 0" radius="0.05" height="0.8" color="red"></a-cylinder>
-      <a-cone position="0 0.5 0" radius-bottom="0.15" radius-top="0.0" height="0.3" color="red"></a-cone>
+    <!-- Compass Disc and Arrow -->
+    <a-entity id="compass-container" position="0 0.5 -3" rotation="0 0 0">
+      <a-cylinder position="0 0 0" radius="0.7" height="0.02" color="#222" opacity="0.5"></a-cylinder>
+
+      <!-- Arrow -->
+      <a-entity id="compass-arrow">
+        <a-cylinder position="0 0.02 0" radius="0.05" height="0.8" color="red"></a-cylinder>
+        <a-cone position="0 0.4 0" radius-bottom="0.15" radius-top="0.0" height="0.3" color="red"></a-cone>
+      </a-entity>
+
+      <!-- Compass Rose -->
+      <a-text value="N" position="0 0.2 0.6" color="white" align="center"></a-text>
+      <a-text value="E" position="0.6 0.2 0" color="white" align="center" rotation="0 -90 0"></a-text>
+      <a-text value="S" position="0 0.2 -0.6" color="white" align="center" rotation="0 180 0"></a-text>
+      <a-text value="W" position="-0.6 0.2 0" color="white" align="center" rotation="0 90 0"></a-text>
     </a-entity>
-    
+
     <a-entity camera></a-entity>
   </a-scene>
 
   <script>
+    let filteredHeading = 0;
     let currentRotation = 0;
+    let targetRotation = 0;
 
     function updateGPS() {
       if (navigator.geolocation) {
@@ -44,15 +77,15 @@
             const lat = pos.coords.latitude.toFixed(6);
             const lon = pos.coords.longitude.toFixed(6);
             const acc = pos.coords.accuracy.toFixed(1);
-            document.querySelector('#gps-text').setAttribute('value', `Lat: ${lat}\nLon: ${lon}\n±${acc} m`);
+            document.querySelector('#coords').innerText = `Lat: ${lat}, Lon: ${lon} (±${acc} m)`;
           },
           (err) => {
-            document.querySelector('#gps-text').setAttribute('value', 'Error: ' + err.message);
+            document.querySelector('#coords').innerText = 'Error: ' + err.message;
           },
           { enableHighAccuracy: true }
         );
       } else {
-        document.querySelector('#gps-text').setAttribute('value', 'Geolocation not supported');
+        document.querySelector('#coords').innerText = 'Geolocation not supported';
       }
     }
 
@@ -64,9 +97,11 @@
         heading = 360 - event.alpha; // Android
       }
       if (heading !== undefined) {
-        const dir = compassDirection(heading);
-        document.querySelector('#compass-text').setAttribute('value', `Heading: ${heading.toFixed(0)}° (${dir})`);
-        animateArrowRotation(heading);
+        // Low-pass filter for smoother transitions
+        filteredHeading = filteredHeading + 0.1 * (heading - filteredHeading);
+        targetRotation = filteredHeading;
+        const dir = compassDirection(filteredHeading);
+        document.querySelector('#heading').innerText = `Heading: ${filteredHeading.toFixed(0)}° (${dir})`;
       }
     }
 
@@ -75,15 +110,11 @@
       return dirs[Math.round(deg / 45)];
     }
 
-    function animateArrowRotation(targetRotation) {
-      const arrow = document.querySelector('#compass-arrow');
-      const step = ((targetRotation - currentRotation + 540) % 360 - 180) / 10; // Smooth step
-      let i = 0;
-      const interval = setInterval(() => {
-        currentRotation = (currentRotation + step + 360) % 360;
-        arrow.setAttribute('rotation', `0 0 ${currentRotation.toFixed(1)}`);
-        if (++i > 10) clearInterval(interval);
-      }, 20);
+    function smoothRotate() {
+      const container = document.querySelector('#compass-container');
+      currentRotation = currentRotation + 0.05 * ((targetRotation - currentRotation + 540) % 360 - 180);
+      container.setAttribute('rotation', `0 0 ${currentRotation.toFixed(1)}`);
+      requestAnimationFrame(smoothRotate);
     }
 
     if (window.DeviceOrientationEvent) {
@@ -91,6 +122,7 @@
     }
 
     updateGPS();
+    smoothRotate();
   </script>
 </body>
 </html>
